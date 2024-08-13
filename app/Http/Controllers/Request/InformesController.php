@@ -36,11 +36,6 @@ class InformesController extends Controller
             }
         }
 
-//        $dataTemplate["listaInforme"] = $informeRetornar;
-//        $html = view("app.request.informe", $dataTemplate)->render();
-//        $this->respuesta["data"] = $html;
-//        $this->respuesta["error"] = "0";
-
         return response()->json($this->respuesta);
     }
 
@@ -60,16 +55,35 @@ class InformesController extends Controller
             $tipoHorario = $this->obtenerTipoHorario($horario['descripcion']);
             $horaProgramada = $fecha->copy()->setTimeFromTimeString($horario['horario_inicio']);
             $registro = $this->encontrarRegistroMasCercano($registrosAcceso, $horaProgramada);
-            $informeDiario['registros'][$tipo] = $registro ? $registro["registro_acceso"] : null;
+            $informeDiario['registros'][$tipoHorario] = $registro ? $registro["registro_acceso"] : null;
 
             if ($registro) {
-                $diferencia = Carbon::parse($horaProgramada)->diffInMinutes($registro["registro_acceso"], false);
+                $tiempoRegistro = Carbon::parse($registro["registro_acceso"], false);
+                $diferenciaMinutos = $horaProgramada->diffInMinutes($tiempoRegistro, false);
+
+                if (mb_strtolower($tipoHorario) == 'entrada_laboral' && $diferenciaMinutos < 0) {
+                    $informeDiario['horas_extras'] += abs($diferenciaMinutos / 60);
+                } else if (mb_strtolower($tipoHorario) == 'salida_laboral' && $diferenciaMinutos > 0) {
+                    $informeDiario['horas_extras'] += $diferenciaMinutos / 60;
+                } else if ($diferenciaMinutos > 0) {
+                    $informeDiario['horas_perdidas'] += $diferenciaMinutos / 60;
+                }
+            } else {
+                if (in_array($tipoHorario, ['entrada_laboral', 'entrada_desayuno', 'entrada_almuerzo'])) {
+                    $informeDiario['horas_perdidas'] += 1; // Asumimos 1 hora perdida por cada entrada no registrada
+                }
             }
         }
+
+        return $informeDiario;
     }
 
+
+    // HORA PROGRAMADA ES LA HORA LA CUAL ESTA CONFIGURADA PARA EL EVENTO POR EJEMPLO ENTRADA_LABORAL ES A LAS 07:00
+    // REGISTROS SON LOS EVENTOS QUE HA REGISTRADO EL USUARIO
     function encontrarRegistroMasCercano($registros, $horaProgramada)
     {
+
         $registroMasCercano = null;
         $diferenciaMinima = PHP_INT_MAX;
 
