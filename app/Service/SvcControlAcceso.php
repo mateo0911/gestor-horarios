@@ -20,7 +20,7 @@ class SvcControlAcceso
         }
     }
 
-    function obtenerAccesosUsuario($idUsuario, $fecha, $ordenar = false)
+    function obtenerAccesosUsuario($idUsuario, $fecha, $ordenar = "", $limit = 0)
     {
         $resultado = [];
         try {
@@ -40,11 +40,20 @@ class SvcControlAcceso
                 ->where("control_acceso.id_usuario", $idUsuario)
                 ->whereRaw("DATE(control_acceso.registro_acceso) = '" . $fecha . "'");
 
-            if ($ordenar) {
+            if (!empty($ordenar)) {
+                $lista->orderBy("control_acceso.registro_acceso", $ordenar);
+            } else {
                 $lista->orderBy("control_acceso.registro_acceso");
             }
 
-            return $resultado = $lista->get()?->toArray() ?? [];
+            if ($limit > 0) {
+                $lista->limit($limit);
+                 $resultado = $lista->get()?->first()?->toArray() ?? [];
+                 return  $resultado;
+            }
+
+            $resultado = $lista->get()?->toArray() ?? [];
+            return $resultado;
         } catch (Exception $e) {
             Log::channel("database")->info($e);
             return $resultado;

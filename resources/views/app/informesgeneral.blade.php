@@ -13,6 +13,8 @@
                 </div>
                 <div class="card-body">
                     <form id="formulario-informes">
+                        <input class="form-control hasDatepicker" id="fecha_inicio" value="<?= date("Y-m-d", strtotime(date("Y-m-d") . "- 1 month")); ?>" name="fecha_inicio" placeholder="Seleccione fecha" readonly="">
+                        <input class="form-control hasDatepicker" id="fecha_limite" value="<?= date("Y-m-d"); ?>" name="fecha_limite" placeholder="Seleccione fecha" readonly="">
                         <label for="" class="form-label">Selecciona un Usuario</label>
                         <select name="id_usuario" id="id_usuario" class="form-select">
                             <option value="">Seleccione una Opcion</option>
@@ -34,6 +36,20 @@
     </div>
 
     <script>
+
+        jQuery("#fecha_inicio").datepicker({
+            format: 'yyyy-mm-dd',
+            autoclose: true,
+            todayBtn: false,
+            pickerPosition: "bottom-left"
+        });
+        jQuery("#fecha_limite").datepicker({
+            format: 'yyyy-mm-dd',
+            autoclose: true,
+            todayBtn: false,
+            pickerPosition: "bottom-left"
+        });
+
         jQuery("#crear_informe").on("click", () => {
             mostrarLoader()
             axios.post("main/informes/seguimiento", jQuery("#formulario-informes").serializeObject()).then((resp) => {

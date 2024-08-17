@@ -14,20 +14,19 @@ class InformesController extends Controller
 {
     private $respuesta = ["error" => "1", "mensaje" => "", "data" => []];
 
-
+    private $totalHorasExtras = 0;
+    private $totalHorasPerdidas = 0;
     function horarios_general(Request $request, SvcUsuario $svcUsuario, SvcControlAcceso $svcControlAcceso, SvcGrupoHorarios $svcGrupoHorarios, SvcAreas $svcAreas)
     {
-        $informeGeneral = $request->get("general") ?? "";
         $idUsuario = $request->get("id_usuario") ?? "";
-
-        $infoInforme = $request->json()->all();
         $fechaInicio = $request->post("fecha_inicio") ?? "";
         $fechaLimite = $request->post("fecha_limite") ?? "";
+
         $usuarioEncontrado = $svcUsuario->getUsuarioById($idUsuario);
         if (!empty($usuarioEncontrado)) {
             $horarios = $svcGrupoHorarios->HorariosByIdArea($usuarioEncontrado["id_area"]);
-            $fechaInicio = Carbon::parse("2024-07-25");
-            $fechaLimite = Carbon::parse("2024-08-05");
+            $fechaInicio = Carbon::parse($fechaInicio);
+            $fechaLimite = Carbon::parse($fechaLimite);
             $informe = [];
 
             for ($fecha = $fechaInicio; $fecha->lte($fechaLimite); $fecha->addDay()) {
@@ -35,14 +34,17 @@ class InformesController extends Controller
                 $informe[$fecha->format('Y-m-d')] = $informeDiario;
             }
         }
-
+        $this->respuesta["data"] = $informe;
+        $this->respuesta["data"]["nombre_usuario"] = $usuarioEncontrado["nombre"];
+        $this->respuesta["data"]["documento"] = $usuarioEncontrado["documento"];
+        $this->respuesta["error"] = "0";
         return response()->json($this->respuesta);
     }
 
     function procesarInformeDiario($usuario, $horarios, $fecha)
     {
         $svcControlAcceso = new SvcControlAcceso();
-        $registrosAcceso = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), true);
+        $registrosUsuario = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "");
 
         $informeDiario = [
             'fecha' => $fecha->format('Y-m-d'),
@@ -51,33 +53,106 @@ class InformesController extends Controller
             'horas_perdidas' => 0,
         ];
 
-        foreach ($horarios as $horario) {
-            $tipoHorario = $this->obtenerTipoHorario($horario['descripcion']);
-            $horaProgramada = $fecha->copy()->setTimeFromTimeString($horario['horario_inicio']);
-            $registro = $this->encontrarRegistroMasCercano($registrosAcceso, $horaProgramada);
-            $informeDiario['registros'][$tipoHorario] = $registro ? $registro["registro_acceso"] : null;
+        if (!empty($registrosUsuario)) {
+            $primerRegistrosAcceso = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "", 1);
+            $RegistrosAccesoSalida = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "desc", 1);
 
-            if ($registro) {
-                $tiempoRegistro = Carbon::parse($registro["registro_acceso"], false);
-                $diferenciaMinutos = $horaProgramada->diffInMinutes($tiempoRegistro, false);
+            foreach ($horarios as $horario) {
+                $tipoHorario = $this->obtenerTipoHorario($horario['descripcion']);
 
-                if (mb_strtolower($tipoHorario) == 'entrada_laboral' && $diferenciaMinutos < 0) {
-                    $informeDiario['horas_extras'] += abs($diferenciaMinutos / 60);
-                } else if (mb_strtolower($tipoHorario) == 'salida_laboral' && $diferenciaMinutos > 0) {
-                    $informeDiario['horas_extras'] += $diferenciaMinutos / 60;
-                } else if ($diferenciaMinutos > 0) {
-                    $informeDiario['horas_perdidas'] += $diferenciaMinutos / 60;
+                if (mb_strtolower($horario["descripcion"]) == "entrada_laboral") {
+                    $horasCalculadas = $this->calcularHorasExtrasOPerdidas($horario["horario_inicio"], date("H:i:s", strtotime($primerRegistrosAcceso["registro_acceso"])));
                 }
-            } else {
-                if (in_array($tipoHorario, ['entrada_laboral', 'entrada_desayuno', 'entrada_almuerzo'])) {
-                    $informeDiario['horas_perdidas'] += 1; // Asumimos 1 hora perdida por cada entrada no registrada
+
+                if (mb_strtolower($horario["descripcion"]) == "cierre_laboral") {
+                    $horasCalculadas = $this->calcularHorasPerdidas($horario["horario_inicio"], date("H:i:s", strtotime($RegistrosAccesoSalida["registro_acceso"])));
                 }
             }
+
+            $horasTrabajadas = $this->calcularHorasTrabajadas(date("H:i:s", strtotime($primerRegistrosAcceso["registro_acceso"])), date("H:i:s", strtotime($RegistrosAccesoSalida["registro_acceso"])));
+            $informeDiario["horas_extras"] = $this->totalHorasExtras;
+            $informeDiario["horas_perdidas"] = $this->totalHorasPerdidas;
+            $informeDiario["horas_trabajadas"] = $horasTrabajadas;
         }
 
         return $informeDiario;
     }
 
+    function calcularHorasExtrasOPerdidas($horaEstupulada, $horaRegistrada)
+    {
+        // Convertir las cadenas de hora a objetos Carbon
+        $esperada = Carbon::parse($horaEstupulada);
+        $registrada = Carbon::parse($horaRegistrada);
+
+        // Calcular la diferencia en minutos de la hora del horario que deberia ser versus el registro del usuario
+        $diferenciaMinutos = $esperada->diffInMinutes($registrada, false);
+
+        // Calculamos las horas dependiendo de la diferencia de minutos obtenida anteriormente
+        $horas = abs(floor($diferenciaMinutos / 60));
+        $minutos = abs($diferenciaMinutos % 60);
+
+        // Determinar si son horas extras o perdidas
+        if ($diferenciaMinutos < 0) {
+            $this->totalHorasExtras += (int)$horas;
+            $tipo = 'horas_extras';
+        } elseif ($diferenciaMinutos > 0) {
+            $this->totalHorasPerdidas += (int)$horas;
+            $tipo = 'horas_perdidas';
+        }
+
+        // Formatear el resultado
+        $diferencia = sprintf('%02d:%02d', $horas, $minutos);
+
+        return [
+            'diferencia' => $diferencia,
+            'tipo' => $tipo,
+        ];
+    }
+
+    function calcularHorasPerdidas($horaEstupulada, $horaRegistrada)
+    {
+        // Convertir las cadenas de hora a objetos Carbon
+        $esperada = Carbon::parse($horaEstupulada);
+        $registrada = Carbon::parse($horaRegistrada);
+
+        // Calcular la diferencia en minutos de la hora del horario que deberia ser versus el registro del usuario
+        $diferenciaMinutos = $esperada->diffInMinutes($registrada, false);
+
+        // Calculamos las horas dependiendo de la diferencia de minutos obtenida anteriormente
+        $horas = abs(floor($diferenciaMinutos / 60));
+        $minutos = abs($diferenciaMinutos % 60);
+
+        // Determinar si son horas extras o perdidas
+        if ($diferenciaMinutos < 0) {
+            $this->totalHorasPerdidas += (int)$horas;
+            $tipo = 'horas_perdidas';
+        } elseif ($diferenciaMinutos > 0) {
+            $this->totalHorasExtras += (int)$horas;
+            $tipo = 'horas_extras';
+        }
+
+        // Formatear el resultado
+        $diferencia = sprintf('%02d:%02d', $horas, $minutos);
+
+        return [
+            'diferencia' => $diferencia,
+            'tipo' => $tipo,
+        ];
+    }
+    function calcularHorasTrabajadas($horaInicial, $horaCierre)
+    {
+        $inicial = Carbon::parse($horaInicial);
+        $cierre = Carbon::parse($horaCierre);
+
+        $diferenciaMinutos = $inicial->diffInMinutes($cierre, false);
+
+        $horasTrabajadas = abs(floor($diferenciaMinutos / 60));
+        $minutos = abs($diferenciaMinutos % 60);
+
+        $diferencia = sprintf('%02d:%02d', $horasTrabajadas, $minutos);
+
+        return $diferencia ?? 0;
+    }
 
     // HORA PROGRAMADA ES LA HORA LA CUAL ESTA CONFIGURADA PARA EL EVENTO POR EJEMPLO ENTRADA_LABORAL ES A LAS 07:00
     // REGISTROS SON LOS EVENTOS QUE HA REGISTRADO EL USUARIO
