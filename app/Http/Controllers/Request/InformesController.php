@@ -30,14 +30,20 @@ class InformesController extends Controller
             $informe = [];
 
             for ($fecha = $fechaInicio; $fecha->lte($fechaLimite); $fecha->addDay()) {
+                $this->totalHorasPerdidas = 0;
+                $this->totalHorasExtras = 0;
                 $informeDiario = $this->procesarInformeDiario($usuarioEncontrado["id_usuario"], $horarios, $fecha);
                 $informe[$fecha->format('Y-m-d')] = $informeDiario;
             }
         }
         $this->respuesta["data"] = $informe;
+        $templateView["listaAreas"] = "mateo Gomez";
         $this->respuesta["data"]["nombre_usuario"] = $usuarioEncontrado["nombre"];
         $this->respuesta["data"]["documento"] = $usuarioEncontrado["documento"];
         $this->respuesta["error"] = "0";
+
+
+        $html = view('app.request.informe', $templateView)->render();
         return response()->json($this->respuesta);
     }
 
@@ -51,14 +57,15 @@ class InformesController extends Controller
             'registros' => [],
             'horas_extras' => 0,
             'horas_perdidas' => 0,
+            'horas_trabajadas' => 0
         ];
 
         if (!empty($registrosUsuario)) {
             $primerRegistrosAcceso = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "", 1);
             $RegistrosAccesoSalida = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "desc", 1);
+            $registroTotalesUsuario = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "");
 
             foreach ($horarios as $horario) {
-                $tipoHorario = $this->obtenerTipoHorario($horario['descripcion']);
 
                 if (mb_strtolower($horario["descripcion"]) == "entrada_laboral") {
                     $horasCalculadas = $this->calcularHorasExtrasOPerdidas($horario["horario_inicio"], date("H:i:s", strtotime($primerRegistrosAcceso["registro_acceso"])));
@@ -75,6 +82,8 @@ class InformesController extends Controller
             $informeDiario["horas_trabajadas"] = $horasTrabajadas;
         }
 
+
+        $informeDiario["registros"] = count($registroTotalesUsuario);
         return $informeDiario;
     }
 
@@ -152,40 +161,5 @@ class InformesController extends Controller
         $diferencia = sprintf('%02d:%02d', $horasTrabajadas, $minutos);
 
         return $diferencia ?? 0;
-    }
-
-    // HORA PROGRAMADA ES LA HORA LA CUAL ESTA CONFIGURADA PARA EL EVENTO POR EJEMPLO ENTRADA_LABORAL ES A LAS 07:00
-    // REGISTROS SON LOS EVENTOS QUE HA REGISTRADO EL USUARIO
-    function encontrarRegistroMasCercano($registros, $horaProgramada)
-    {
-
-        $registroMasCercano = null;
-        $diferenciaMinima = PHP_INT_MAX;
-
-        foreach ($registros as $registro) {
-            $tiempoRegistro = Carbon::parse($registro['registro_acceso']);
-            $diferencia = abs($tiempoRegistro->diffInMinutes($horaProgramada));
-
-            if ($diferencia < $diferenciaMinima) {
-                $diferenciaMinima = $diferencia;
-                $registroMasCercano = $registro;
-            }
-        }
-
-        return $registroMasCercano;
-    }
-
-    private function obtenerTipoHorario($descripcion)
-    {
-        $mapeoTipos = [
-            'entrada laboral' => 'entrada_laboral',
-            'desayuno' => 'desayuno',
-            'entrada desayuno' => 'entrada_desayuno',
-            'almuerzo' => 'almuerzo',
-            'entrada almuerzo' => 'entrada_almuerzo',
-            'salida laboral' => 'salida_laboral',
-        ];
-
-        return $mapeoTipos[strtolower($descripcion)] ?? $descripcion;
     }
 }
