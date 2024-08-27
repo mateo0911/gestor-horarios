@@ -1,7 +1,7 @@
 @extends('layout.backoffice')
 @section('content')
     <div class="row">
-        <div class="col-md-6">
+        <div class="col-6">
             <div class="card">
                 <div class="card-header d-flex justify-content-between">
                     <div class="m-2">
@@ -29,10 +29,10 @@
                 </div>
             </div>
         </div>
+        <div class="col-6" id="resultadoHorasExtras"></div>
     </div>
     <div class="row">
-        <div class="col-md-12" id="resultadoInforme">
-        </div>
+        <div class="col-12" id="resultadoInforme"></div>
     </div>
 
     <script>
@@ -54,7 +54,11 @@
             mostrarLoader()
             axios.post("main/informes/seguimiento", jQuery("#formulario-informes").serializeObject()).then((resp) => {
                 if (resp.data.error === "0") {
-                    jQuery("#resultadoInforme").append(resp.data.data);
+                    jQuery("#resultadoInforme").append(resp.data.data.informeGeneral);
+                    jQuery("#resultadoHorasExtras").append(resp.data.data.informeCalculoHoras);
+                    new DataTable('.tablaInformes', {
+                        dom: 'QBfltipr'
+                    })
                 }
             });
             ocultarLoader();

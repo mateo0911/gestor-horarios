@@ -36,14 +36,17 @@ class InformesController extends Controller
                 $informe[$fecha->format('Y-m-d')] = $informeDiario;
             }
         }
-        $this->respuesta["data"] = $informe;
-        $templateView["listaAreas"] = "mateo Gomez";
-        $this->respuesta["data"]["nombre_usuario"] = $usuarioEncontrado["nombre"];
-        $this->respuesta["data"]["documento"] = $usuarioEncontrado["documento"];
+
+        $templateView["informe"] = $informe;
+        $templateView["nombre_usuario"] = $usuarioEncontrado["nombre"];
+        $templateView["documento"] = $usuarioEncontrado["documento"];
+
+        $htmlInformeGeneral = view('app.request.informe', $templateView)->render();
+        $htmlInformeCalculoHoras = view('app.request.informehorasextras', $templateView)->render();
+
+        $this->respuesta["data"]["informeGeneral"] = $htmlInformeGeneral;
+        $this->respuesta["data"]["informeCalculoHoras"] = $htmlInformeCalculoHoras;
         $this->respuesta["error"] = "0";
-
-
-        $html = view('app.request.informe', $templateView)->render();
         return response()->json($this->respuesta);
     }
 
@@ -54,16 +57,16 @@ class InformesController extends Controller
 
         $informeDiario = [
             'fecha' => $fecha->format('Y-m-d'),
-            'registros' => [],
+            'total_registros_por_dia' => 0,
             'horas_extras' => 0,
             'horas_perdidas' => 0,
-            'horas_trabajadas' => 0
+            'horas_trabajadas' => 0,
+            'registros_generales' => 0
         ];
 
         if (!empty($registrosUsuario)) {
             $primerRegistrosAcceso = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "", 1);
             $RegistrosAccesoSalida = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "desc", 1);
-            $registroTotalesUsuario = $svcControlAcceso->obtenerAccesosUsuario($usuario, $fecha->format('Y-m-d'), "");
 
             foreach ($horarios as $horario) {
 
@@ -80,10 +83,11 @@ class InformesController extends Controller
             $informeDiario["horas_extras"] = $this->totalHorasExtras;
             $informeDiario["horas_perdidas"] = $this->totalHorasPerdidas;
             $informeDiario["horas_trabajadas"] = $horasTrabajadas;
+            $informeDiario["total_registros_por_dia"] = count($registrosUsuario);
+            $informeDiario["registros_generales"] = $registrosUsuario;
         }
 
 
-        $informeDiario["registros"] = count($registroTotalesUsuario);
         return $informeDiario;
     }
 
