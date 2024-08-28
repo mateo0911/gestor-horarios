@@ -21,14 +21,13 @@ class MainController extends Controller
         return view("Main.login");
     }
 
-    function cargarAreas(SvcAreas $svcAreas, Request $request)
+    function cargarAreas(SvcAreas $svcAreas, Request $request, SvcGrupoHorarios $svcGrupoHorarios)
     {
         $id = $request->get("id_area") ?? "";
         if (!empty($id)) {
             $templateView["areaById"] = $svcAreas->getAreaById($id);
         }
         $templateView["listaAreas"] = $svcAreas->getAreas();
-
         return view('app.areas', $templateView);
     }
 

@@ -58,7 +58,7 @@
                     jQuery("#resultadoHorasExtras").append(resp.data.data.informeCalculoHoras);
                     new DataTable('.tablaInformes', {
                         dom: 'QBfltipr'
-                    })
+                    });
                 }
             });
             ocultarLoader();

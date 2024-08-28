@@ -17,14 +17,14 @@
                         <label for="exampleDataList" class="form-label">Nombre Area</label>
                         <input type="text" name="nombre_area" id="nombre_area" class="form-control" value="{{$areaById["nombre_area"] ?? ""}}" placeholder="digite el nombre de la area">
 
-                        <div class="row" id="id-grupos-horarios">
-                            <select name="grupos_horarios" id="grupo_horario">
-                                <option value="">Seleccione Opcion</option>
-                                @foreach($listaGrupos as $grupo)
-
-                                @endforeach
-                            </select>
-                        </div>
+{{--                        <div class="row" id="id-grupos-horarios">--}}
+{{--                            <select name="grupos_horarios" id="grupo_horario">--}}
+{{--                                <option value="">Seleccione Opcion</option>--}}
+{{--                                @foreach($listaGrupos as $grupo)--}}
+{{--                                    <option value="{{$grupo["id_grupo"]}}"></option>--}}
+{{--                                @endforeach--}}
+{{--                            </select>--}}
+{{--                        </div>--}}
 
                         <label for="exampleDataList" class="form-label">Estado</label>
                         <?php if (!empty($areaById["estado"])) { ?>
@@ -133,5 +133,9 @@
             });
             ocultarLoader();
         });
+
+        new DataTable('.dinamyc-table', {
+            dom: 'QBfltipr'
+        })
     </script>
 @endsection
